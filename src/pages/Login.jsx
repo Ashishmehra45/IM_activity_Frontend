@@ -29,7 +29,7 @@ const MPIDCAuth = () => {
     e.preventDefault();
     setLoading(true);
 
-    const endpoint = isLogin ? '/api/employees/login' : '/api/employees/register';
+    const endpoint = isLogin ? '/employees/login' : '/employees/register';
     
     try {
       const res = await axios.post(`${API_BASE_URL}${endpoint}`, formData);
