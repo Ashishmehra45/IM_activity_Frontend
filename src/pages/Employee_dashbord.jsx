@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { useEffect } from "react";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -12,11 +13,36 @@ import {
   Bell,
   AlertCircle,
   Search,
+  LogOut,
 } from "lucide-react";
+import toast from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
 
 const MPIDCTracker = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [filterStatus, setFilterStatus] = useState("All");
+  const [user, setUser] = useState({ name: "", designation: "" });
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error("Error parsing user data", error);
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    toast.success("Logged out successfully");
+    setTimeout(() => {
+      navigate("/login");
+    }, 1000);
+  };
 
   const [tasks, setTasks] = useState([
     {
@@ -169,17 +195,32 @@ const MPIDCTracker = () => {
           </button>
         </nav>
 
+        {/* 👤 Sidebar Profile & Logout */}
         <div className="mt-auto pt-8 border-t border-white/10">
-          <div className="flex items-center gap-3 group cursor-pointer hover:bg-white/5 p-2 -ml-2 rounded-xl transition-all">
-            <div className="w-10 h-10 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center font-bold text-sm shadow-inner group-hover:border-blue-500 transition-colors">
-              JD
+          <div className="flex items-center justify-between group p-2 -ml-2 rounded-xl transition-all">
+            <div className="flex items-center gap-3">
+              {/* User Initial Circle */}
+              <div className="w-10 h-10 rounded-full bg-slate-800 border-2 border-blue-500 flex items-center justify-center font-bold text-sm text-white">
+                {user.name ? user.name[0] : "O"}
+              </div>
+              <div className="text-left overflow-hidden">
+                <p className="text-sm font-bold text-white truncate w-24">
+                  {user.name || "Officer"}
+                </p>
+                <p className="text-[10px] text-slate-400 uppercase truncate">
+                  {user?.designation || "Field Officer"}
+                </p>
+              </div>
             </div>
-            <div className="text-left">
-              <p className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">
-                John Doe
-              </p>
-              <p className="text-xs text-slate-400">Field Officer</p>
-            </div>
+
+            {/* 🚪 Logout Icon Button */}
+            <button
+              onClick={handleLogout}
+              className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+              title="Logout"
+            >
+              <LogOut size={20} />
+            </button>
           </div>
         </div>
       </aside>
@@ -187,20 +228,26 @@ const MPIDCTracker = () => {
       {/* 🚀 Main Content Wrapper */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* ✨ Mobile Top Header (Sticky) */}
+        {/* ✨ Mobile Header with Logout */}
         <header className="md:hidden sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-slate-900 flex items-center justify-center shadow-sm">
               <Activity size={18} className="text-white" />
             </div>
-            <h2 className="text-xl font-black tracking-tight text-slate-900">
-              MPIDC
-            </h2>
+            <h2 className="text-xl font-black text-slate-900">MPIDC</h2>
           </div>
-          <div className="w-10 h-10 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center font-bold text-sm text-slate-700 shadow-sm relative">
-            JD
-            {unreadCount > 0 && (
-              <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 border-2 border-white rounded-full"></div>
-            )}
+
+          <div className="flex items-center gap-3">
+            {/* 🚪 Mobile Logout Button */}
+            <button
+              onClick={handleLogout}
+              className="p-2 text-slate-500 hover:text-red-600 transition-colors"
+            >
+              <LogOut size={22} />
+            </button>
+            <div className="w-9 h-9 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center font-bold text-sm text-slate-700 shadow-sm">
+              {user.name ? user.name[0] : "O"}
+            </div>
           </div>
         </header>
 
@@ -239,7 +286,7 @@ const MPIDCTracker = () => {
                 <header className="mb-8">
                   <div>
                     <p className="text-xs font-semibold text-slate-400 mb-1 uppercase tracking-widest">
-                      Welcome back
+                      Welcome back, {user?.name || "Officer"}
                     </p>
                     <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
                       Daily Overview
