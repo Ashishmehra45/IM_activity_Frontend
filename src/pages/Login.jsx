@@ -6,6 +6,7 @@ import {
   Mail, Lock, User, ArrowRight, ShieldCheck, 
   Briefcase, Building
 } from 'lucide-react';
+import API_BASE_URL from '../config/config';
 
 const MPIDCAuth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -31,7 +32,7 @@ const MPIDCAuth = () => {
     const endpoint = isLogin ? '/api/employees/login' : '/api/employees/register';
     
     try {
-      const res = await axios.post(`http://localhost:5000${endpoint}`, formData);
+      const res = await axios.post(`${API_BASE_URL}${endpoint}`, formData);
 
       if (isLogin) {
         // Login Logic
