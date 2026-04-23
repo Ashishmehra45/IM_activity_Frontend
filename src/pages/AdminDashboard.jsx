@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import axios from "axios";
+import API_URL from "../config/config"; // 👈 API base URL import karo
 import { useEffect } from "react";
 import {
   LayoutDashboard,
@@ -39,7 +40,7 @@ const MPIDCAdminDashboard = () => {
   const fetchAllTasks = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get("http://localhost:5000/api/admin/tasks", {
+      const res = await axios.get(`${API_URL}/admin/tasks`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       console.log("Backend se ye Tasks aaye:", res.data); // 👈 Browser console me check karne ke liye
@@ -60,7 +61,7 @@ const MPIDCAdminDashboard = () => {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.get(
-        `http://localhost:5000/api/admin/employee-tasks/${selectedEmployee._id}`,
+        `${API_URL}/admin/employee-tasks/${selectedEmployee._id}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -119,7 +120,7 @@ const MPIDCAdminDashboard = () => {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.post(
-        "http://localhost:5000/api/admin/assign-task",
+        `${API_URL}/admin/assign-task`,
         payload,
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -141,7 +142,7 @@ const MPIDCAdminDashboard = () => {
   const fetchEmployees = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get("http://localhost:5000/api/admin/all", {
+      const res = await axios.get(`${API_URL}/admin/all`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setEmployees(res.data); // Backend se array aayega
@@ -171,7 +172,7 @@ const MPIDCAdminDashboard = () => {
     try {
       const token = localStorage.getItem("token");
       const res = await axios.put(
-        `http://localhost:5000/api/admin/approve/${id}`,
+        `${API_URL}/admin/approve/${id}`,
         {},
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -198,7 +199,7 @@ const MPIDCAdminDashboard = () => {
       return;
     try {
       const token = localStorage.getItem("token");
-      await axios.delete(`http://localhost:5000/api/admin/reject/${id}`, {
+      await axios.delete(`${API_URL}/admin/reject/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setEmployees(employees.filter((emp) => emp._id !== id));
