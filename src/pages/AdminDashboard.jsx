@@ -21,10 +21,12 @@ import {
   Send,
   LogOut,
 } from "lucide-react";
+
 import { useNavigate } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast"; // 👈 Toaster add karo
 
 const MPIDCAdminDashboard = () => {
+  const [user, setUser] = useState({});
   const [activeTab, setActiveTab] = useState("overview");
   const [taskFilter, setTaskFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -51,10 +53,20 @@ const MPIDCAdminDashboard = () => {
   };
 
   // 2. 🔥 YAHAN GAlTI THI: Ise page load par call karna zaroori hai!
+  // 👇 IS PURANE USE-EFFECT KO REPLACE KAR DE
   useEffect(() => {
+    // 1. LocalStorage se admin ka data nikalo
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    } else {
+      navigate("/login"); // Agar data nahi hai toh login pe bhej do
+    }
+
+    // 2. Baaki API calls
     fetchEmployees();
-    fetchAllTasks(); // 👈 Ise add kar de bhai!
-  }, []);
+    fetchAllTasks(); 
+  },[] );
 
   const fetchSpecificTasks = async () => {
     if (!selectedEmployee) return; // Agar koi select nahi hai toh mat chalo
@@ -161,6 +173,8 @@ const MPIDCAdminDashboard = () => {
     () => employees.filter((emp) => !emp.isApproved && emp.role !== "Admin"),
     [employees],
   );
+
+  
 
   const approvedStaff = useMemo(
     () => employees.filter((emp) => emp.isApproved && emp.role !== "Admin"),
@@ -325,15 +339,27 @@ const MPIDCAdminDashboard = () => {
           </button>
         </nav>
 
+     {/* 👤 Sidebar Profile & Logout */}
         <div className="mt-auto pt-8 border-t border-white/10">
           <div className="flex items-center justify-between group p-2 -ml-2 rounded-xl transition-all">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-slate-800 border-2 border-emerald-500 flex items-center justify-center font-bold text-sm text-white">
-                AM
+              
+              {/* 1. Dynamic Initials (Ultra Safe Logic) */}
+              <div className="w-10 h-10 rounded-full bg-slate-800 border-2 border-emerald-500 flex items-center justify-center font-bold text-sm text-white uppercase">
+                {user?.name 
+                  ? user.name.trim().split(/\s+/).map(n => n[0]).join('').substring(0, 2) 
+                  : "O"}
               </div>
-              <div className="text-left">
-                <p className="text-sm font-bold text-white">Ashish Mehra</p>
-                <p className="text-xs text-slate-400">Super Admin</p>
+              
+              <div className="text-left overflow-hidden">
+                {/* 2. Dynamic Real Name */}
+                <p className="text-sm font-bold text-white truncate w-32">
+                  {user?.name || "Officer"}
+                </p>
+                {/* 3. Dynamic Role/Designation */}
+                <p className="text-xs text-slate-400 truncate">
+                  {user?.role || user?.designation || "Field Officer"}
+                </p>
               </div>
             </div>
 
@@ -353,6 +379,7 @@ const MPIDCAdminDashboard = () => {
       <div className="flex-1 flex flex-col min-w-0">
         {/* ✨ Mobile Header */}
         {/* ✨ Mobile Header */}
+       {/* ✨ Mobile Header */}
         <header className="md:hidden sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center shadow-sm">
@@ -371,8 +398,12 @@ const MPIDCAdminDashboard = () => {
             >
               <LogOut size={22} />
             </button>
-            <div className="w-9 h-9 rounded-full bg-slate-50 border-2 border-emerald-500 flex items-center justify-center font-bold text-sm text-slate-700">
-              AM
+            
+            {/* 🔥 DYNAMIC INITIALS (Mobile) */}
+            <div className="w-9 h-9 rounded-full bg-slate-50 border-2 border-emerald-500 flex items-center justify-center font-bold text-sm text-slate-700 uppercase">
+              {user?.name 
+                ? user.name.trim().split(/\s+/).map(n => n[0]).join('').substring(0, 2) 
+                : "AD"}
             </div>
           </div>
         </header>
@@ -380,7 +411,7 @@ const MPIDCAdminDashboard = () => {
         {/* 🚀 Main Scrolling Area */}
         <main className="flex-1 pb-28 md:pb-12 overflow-y-auto pt-6 md:pt-10">
           <div className="p-5 md:px-12 max-w-6xl mx-auto">
-           {/* 📊 OVERVIEW TAB */}
+         {/* 📊 OVERVIEW TAB */}
             {activeTab === "overview" && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <header className="mb-8">
@@ -392,81 +423,108 @@ const MPIDCAdminDashboard = () => {
                   </p>
                 </header>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-5 mb-8">
-                  
-                  {/* 🟢 Card 1: Verified Staff */}
-                  <div className="bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-emerald-200 transition-all group">
+                {/* 👥 1. TEAM SNAPSHOT (Alag kar diya taaki mix na ho) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5 mb-10">
+                  {/* 🟢 Verified Staff */}
+                  <div 
+                    onClick={() => { setActiveTab("team"); setSelectedEmployee(null); }}
+                    className="cursor-pointer bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-emerald-200 transition-all group"
+                  >
                     <div className="flex justify-between items-start mb-4">
                       <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
                         <Users size={24} />
                       </div>
-                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
-                        Active
-                      </span>
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">Active</span>
                     </div>
-                    <h3 className="text-4xl font-black text-slate-900 mb-1">
-                      {approvedStaff.length}
-                    </h3>
-                    <p className="text-slate-500 text-sm font-semibold">
-                      Verified Officers
-                    </p>
+                    <h3 className="text-4xl font-black text-slate-900 mb-1">{approvedStaff.length}</h3>
+                    <p className="text-slate-500 text-sm font-semibold">Verified Officers</p>
                   </div>
 
-                  {/* 🟠 Card 2: Pending Requests */}
-                  <div className="bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-orange-200 transition-all group">
+                  {/* 🟠 Pending Team Requests */}
+                  <div 
+                    onClick={() => { setActiveTab("team"); setSelectedEmployee(null); }}
+                    className="cursor-pointer bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-orange-200 transition-all group"
+                  >
                     <div className="flex justify-between items-start mb-4">
                       <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 group-hover:scale-110 transition-transform">
                         <Clock size={24} />
                       </div>
-                      {pendingRequests.length > 0 && (
-                        <span className="flex h-3 w-3 relative">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span>
-                        </span>
-                      )}
                     </div>
-                    <h3 className="text-4xl font-black text-orange-600 mb-1">
-                      {pendingRequests.length}
-                    </h3>
-                    <p className="text-slate-500 text-sm font-semibold">
-                      Pending Access
-                    </p>
+                    <h3 className="text-4xl font-black text-orange-600 mb-1">{pendingRequests.length}</h3>
+                    <p className="text-slate-500 text-sm font-semibold">Pending Access</p>
                   </div>
+                </div>
 
-                  {/* 🔵 Card 3: Total Global Tasks */}
-                  <div className="bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-blue-200 transition-all group">
+                {/* 📋 2. TASKS SNAPSHOT (Ekdum Split kiya hua) */}
+                <h3 className="text-lg font-bold text-slate-800 mb-4">Global Tasks Tracking</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-5 mb-8">
+                  
+                  {/* 🔵 Card 1: TOTAL TASKS */}
+                  <div 
+                    onClick={() => { setActiveTab("tasks"); setTaskFilter("All"); }}
+                    className="cursor-pointer bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-blue-200 transition-all group"
+                  >
                     <div className="flex justify-between items-start mb-4">
                       <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
                         <Briefcase size={24} />
                       </div>
-                      <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
-                        Overall
-                      </span>
+                      <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">All</span>
                     </div>
                     <h3 className="text-4xl font-black text-slate-900 mb-1">
                       {allTasks?.length || 0}
                     </h3>
-                    <p className="text-slate-500 text-sm font-semibold">
-                      Total Tasks
-                    </p>
+                    <p className="text-slate-500 text-sm font-semibold">Total Tasks</p>
                   </div>
 
-                  {/* 🟢 Card 4: Completed Tasks */}
-                  <div className="bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-emerald-200 transition-all group">
+                  {/* 🔴 Card 2: PENDING TASKS */}
+                  <div 
+                    onClick={() => { setActiveTab("tasks"); setTaskFilter("Pending"); }}
+                    className="cursor-pointer bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-red-200 transition-all group"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
+                        <AlertTriangle size={24} />
+                      </div>
+                      <span className="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded-lg">Wait</span>
+                    </div>
+                    <h3 className="text-4xl font-black text-red-600 mb-1">
+                      {allTasks?.filter(t => t.status?.toLowerCase().trim() === 'pending' || t.status?.toLowerCase().trim() === 'overdue').length || 0}
+                    </h3>
+                    <p className="text-slate-500 text-sm font-semibold">Pending Tasks</p>
+                  </div>
+
+                  {/* 🟡 Card 3: IN PROGRESS TASKS */}
+                  <div 
+                    onClick={() => { setActiveTab("tasks"); setTaskFilter("In Progress"); }}
+                    className="cursor-pointer bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-amber-200 transition-all group"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
+                        <Activity size={24} />
+                      </div>
+                      <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">Work</span>
+                    </div>
+                    <h3 className="text-4xl font-black text-amber-600 mb-1">
+                      {allTasks?.filter(t => t.status?.toLowerCase().trim() === 'in progress').length || 0}
+                    </h3>
+                    <p className="text-slate-500 text-sm font-semibold">In Progress</p>
+                  </div>
+
+                  {/* 🟢 Card 4: COMPLETED TASKS */}
+                  <div 
+                    onClick={() => { setActiveTab("tasks"); setTaskFilter("Completed"); }}
+                    className="cursor-pointer bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-emerald-200 transition-all group"
+                  >
                     <div className="flex justify-between items-start mb-4">
                       <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
                         <CheckCircle size={24} />
                       </div>
-                      <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">
-                        Success
-                      </span>
+                      <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">Done</span>
                     </div>
                     <h3 className="text-4xl font-black text-emerald-600 mb-1">
-                      {allTasks?.filter(t => t.status?.toLowerCase() === 'completed').length || 0}
+                      {allTasks?.filter(t => t.status?.toLowerCase().trim() === 'completed').length || 0}
                     </h3>
-                    <p className="text-slate-500 text-sm font-semibold">
-                      Completed Tasks
-                    </p>
+                    <p className="text-slate-500 text-sm font-semibold">Completed Tasks</p>
                   </div>
 
                 </div>
