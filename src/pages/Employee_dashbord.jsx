@@ -1,8 +1,10 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import axios from "axios"; // 👈 API call ke liye
 import { API_BASE_URL } from "../config/config"; // 👈 Tera config
 import {
   LayoutDashboard,
+  History,
+  X,
   ClipboardList,
   CheckCircle,
   Clock,
@@ -26,6 +28,52 @@ const MPIDCTracker = () => {
   const [tasks, setTasks] = useState([]); // 👈 Dummy data hat gaya, ab array empty hai
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  // 1. States & Refs
+  const [isTimelineOpen, setIsTimelineOpen] = useState(false);
+  const [activeTask, setActiveTask] = useState(null);
+  const [timelineNote, setTimelineNote] = useState("");
+  const chatEndRef = useRef(null);
+
+  // 2. Scroll Logic
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [activeTask?.timeline, isTimelineOpen]);
+
+  // 3. Add Note Function (Employee Ke Liye)
+  const handleAddTimelineNote = async (taskId) => {
+    if (!timelineNote.trim()) return toast.error("Note cannot be empty!");
+
+    try {
+      const token = localStorage.getItem("token"); // Employee ka token
+
+      // ⚠️ DHYAN DENA: Apna exact route URL check kar lena jo backend me banaya hai
+      const res = await axios.post(
+        `${API_BASE_URL}/admin/${taskId}/timeline`,
+        { note: timelineNote },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      if (res.data.success) {
+        // Instant UI Update
+        setActiveTask((prev) => ({
+          ...prev,
+          timeline: res.data.timeline,
+        }));
+
+        setTimelineNote("");
+
+        // Background Sync (Apne Employee wale fetch function ka naam daalna yahan, jaise fetchMyTasks)
+        setTimeout(() => {
+          fetchMyTasks(); // 👈 TERE FUNCTION KA NAAM
+        }, 800);
+      }
+    } catch (err) {
+      toast.error("Message send nahi hua!");
+    }
+  };
 
   // 🔥 1. PEHLE FUNCTION BANAO (Upar rakhna zaroori hai)
   const fetchMyTasks = async () => {
@@ -55,7 +103,7 @@ const MPIDCTracker = () => {
         console.error("Error parsing user data", error);
       }
     } else {
-      navigate("/login"); 
+      navigate("/login");
     }
   }, [navigate]);
 
@@ -72,22 +120,22 @@ const MPIDCTracker = () => {
   const handleStatusUpdate = async (taskId, newStatus) => {
     try {
       const token = localStorage.getItem("token");
-      
+
       // Backend ko request bhejo status update karne ke liye
       const res = await axios.put(
         `${API_BASE_URL}/employees/update-task/${taskId}`,
         { status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
       if (res.status === 200) {
         toast.success(`Task marked as ${newStatus} ✅`);
-        
+
         // Bina page refresh kiye, local state me data update kar do
         setTasks((prevTasks) =>
           prevTasks.map((t) =>
-            t._id === taskId ? { ...t, status: newStatus } : t
-          )
+            t._id === taskId ? { ...t, status: newStatus } : t,
+          ),
         );
       }
     } catch (error) {
@@ -97,9 +145,13 @@ const MPIDCTracker = () => {
   };
 
   // 📊 3. LIVE STATS CALCULATION (Database se aaye tasks ke hisaab se)
-  const pendingCount = tasks.filter((t) => t.status === "Pending" || t.status === "Overdue").length;
+  const pendingCount = tasks.filter(
+    (t) => t.status === "Pending" || t.status === "Overdue",
+  ).length;
   const completedCount = tasks.filter((t) => t.status === "Completed").length;
-  const inProgressCount = tasks.filter((t) => t.status === "In Progress").length;
+  const inProgressCount = tasks.filter(
+    (t) => t.status === "In Progress",
+  ).length;
 
   // 🔍 4. FILTERING TASKS
   const filteredTasks = useMemo(() => {
@@ -147,15 +199,21 @@ const MPIDCTracker = () => {
             }}
             className={`w-full flex items-center space-x-4 p-4 rounded-2xl cursor-pointer transition-all duration-300 font-medium ${activeTab === "dashboard" ? "bg-white/10 text-white shadow-inner backdrop-blur-md border border-white/10" : "text-slate-400 hover:bg-white/5 hover:text-slate-200"}`}
           >
-            <LayoutDashboard size={22} className={activeTab === "dashboard" ? "text-blue-400" : ""} />
+            <LayoutDashboard
+              size={22}
+              className={activeTab === "dashboard" ? "text-blue-400" : ""}
+            />
             <span>Dashboard</span>
           </button>
-          
+
           <button
             onClick={() => setActiveTab("tasks")}
             className={`w-full flex items-center space-x-4 p-4 rounded-2xl cursor-pointer transition-all duration-300 font-medium ${activeTab === "tasks" ? "bg-white/10 text-white shadow-inner backdrop-blur-md border border-white/10" : "text-slate-400 hover:bg-white/5 hover:text-slate-200"}`}
           >
-            <ClipboardList size={22} className={activeTab === "tasks" ? "text-blue-400" : ""} />
+            <ClipboardList
+              size={22}
+              className={activeTab === "tasks" ? "text-blue-400" : ""}
+            />
             <span>My Tasks</span>
           </button>
 
@@ -164,7 +222,10 @@ const MPIDCTracker = () => {
             className={`w-full flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all duration-300 font-medium ${activeTab === "notifications" ? "bg-white/10 text-white shadow-inner backdrop-blur-md border border-white/10" : "text-slate-400 hover:bg-white/5 hover:text-slate-200"}`}
           >
             <div className="flex items-center space-x-4">
-              <Bell size={22} className={activeTab === "notifications" ? "text-blue-400" : ""} />
+              <Bell
+                size={22}
+                className={activeTab === "notifications" ? "text-blue-400" : ""}
+              />
               <span>Alerts</span>
             </div>
             {unreadCount > 0 && (
@@ -213,7 +274,10 @@ const MPIDCTracker = () => {
             <h2 className="text-xl font-black text-slate-900">MPIDC</h2>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={handleLogout} className="p-2 text-slate-500 hover:text-red-600 transition-colors">
+            <button
+              onClick={handleLogout}
+              className="p-2 text-slate-500 hover:text-red-600 transition-colors"
+            >
               <LogOut size={22} />
             </button>
             <div className="w-9 h-9 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center font-bold text-sm text-slate-700 shadow-sm uppercase">
@@ -225,7 +289,10 @@ const MPIDCTracker = () => {
         {/* ✨ Desktop Top Header */}
         <header className="hidden md:flex sticky top-0 z-30 bg-[#F8FAFC]/80 backdrop-blur-xl px-12 py-6 items-center justify-between">
           <div className="relative w-80 group">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+            <Search
+              size={18}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors"
+            />
             <input
               type="text"
               placeholder="Search your tasks..."
@@ -235,7 +302,12 @@ const MPIDCTracker = () => {
           <div className="flex items-center gap-2.5 text-sm font-semibold text-slate-600 bg-white px-5 py-2.5 rounded-2xl border border-slate-200 shadow-[0_2px_10px_rgb(0,0,0,0.02)]">
             <Clock size={16} className="text-blue-500" />
             <span>
-              {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+              {new Date().toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
             </span>
           </div>
         </header>
@@ -243,7 +315,6 @@ const MPIDCTracker = () => {
         {/* 🚀 Main Scrolling Area */}
         <main className="flex-1 pb-28 md:pb-12 overflow-y-auto">
           <div className="p-5 md:px-12 md:py-2 max-w-5xl mx-auto">
-            
             {/* 📊 DASHBOARD VIEW */}
             {activeTab === "dashboard" && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 mt-2 md:mt-0">
@@ -260,12 +331,19 @@ const MPIDCTracker = () => {
 
                 {/* ✨ Live Stats Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-5 mb-8">
-                  <div onClick={() => handleStatClick("Pending")} className="cursor-pointer group bg-white p-6 rounded-2xl border border-slate-200 hover:border-orange-300 hover:shadow-sm transition-all duration-200">
+                  <div
+                    onClick={() => handleStatClick("Pending")}
+                    className="cursor-pointer group bg-white p-6 rounded-2xl border border-slate-200 hover:border-orange-300 hover:shadow-sm transition-all duration-200"
+                  >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-slate-500 text-sm font-medium mb-1">Pending</p>
+                        <p className="text-slate-500 text-sm font-medium mb-1">
+                          Pending
+                        </p>
                         <h3 className="text-3xl font-semibold text-slate-900">
-                          {pendingCount < 10 ? `0${pendingCount}` : pendingCount}
+                          {pendingCount < 10
+                            ? `0${pendingCount}`
+                            : pendingCount}
                         </h3>
                       </div>
                       <div className="bg-slate-50 p-3 rounded-xl text-orange-500 group-hover:bg-orange-50 transition-colors duration-200">
@@ -274,12 +352,19 @@ const MPIDCTracker = () => {
                     </div>
                   </div>
 
-                  <div onClick={() => handleStatClick("Completed")} className="cursor-pointer group bg-white p-6 rounded-2xl border border-slate-200 hover:border-emerald-300 hover:shadow-sm transition-all duration-200">
+                  <div
+                    onClick={() => handleStatClick("Completed")}
+                    className="cursor-pointer group bg-white p-6 rounded-2xl border border-slate-200 hover:border-emerald-300 hover:shadow-sm transition-all duration-200"
+                  >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-slate-500 text-sm font-medium mb-1">Completed</p>
+                        <p className="text-slate-500 text-sm font-medium mb-1">
+                          Completed
+                        </p>
                         <h3 className="text-3xl font-semibold text-slate-900">
-                          {completedCount < 10 ? `0${completedCount}` : completedCount}
+                          {completedCount < 10
+                            ? `0${completedCount}`
+                            : completedCount}
                         </h3>
                       </div>
                       <div className="bg-slate-50 p-3 rounded-xl text-emerald-500 group-hover:bg-emerald-50 transition-colors duration-200">
@@ -288,12 +373,19 @@ const MPIDCTracker = () => {
                     </div>
                   </div>
 
-                  <div onClick={() => handleStatClick("In Progress")} className="cursor-pointer group bg-white p-6 rounded-2xl border border-slate-200 hover:border-blue-300 hover:shadow-sm transition-all duration-200">
+                  <div
+                    onClick={() => handleStatClick("In Progress")}
+                    className="cursor-pointer group bg-white p-6 rounded-2xl border border-slate-200 hover:border-blue-300 hover:shadow-sm transition-all duration-200"
+                  >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-slate-500 text-sm font-medium mb-1">In Progress</p>
+                        <p className="text-slate-500 text-sm font-medium mb-1">
+                          In Progress
+                        </p>
                         <h3 className="text-3xl font-semibold text-slate-900">
-                          {inProgressCount < 10 ? `0${inProgressCount}` : inProgressCount}
+                          {inProgressCount < 10
+                            ? `0${inProgressCount}`
+                            : inProgressCount}
                         </h3>
                       </div>
                       <div className="bg-slate-50 p-3 rounded-xl text-blue-600 group-hover:bg-blue-50 transition-colors duration-200">
@@ -306,40 +398,73 @@ const MPIDCTracker = () => {
                 {/* ✨ Recent Tasks Snapshot */}
                 <section>
                   <div className="flex items-center justify-between mb-5">
-                    <h3 className="text-lg font-bold text-slate-900">Recent Assignments</h3>
-                    <button onClick={() => setActiveTab("tasks")} className="text-sm font-semibold text-blue-600 hover:text-blue-700 flex items-center group transition-colors">
-                      View All <ChevronRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
+                    <h3 className="text-lg font-bold text-slate-900">
+                      Recent Assignments
+                    </h3>
+                    <button
+                      onClick={() => setActiveTab("tasks")}
+                      className="text-sm font-semibold text-blue-600 hover:text-blue-700 flex items-center group transition-colors"
+                    >
+                      View All{" "}
+                      <ChevronRight
+                        size={16}
+                        className="group-hover:translate-x-0.5 transition-transform"
+                      />
                     </button>
                   </div>
 
                   <div className="space-y-4">
                     {loading ? (
-                      <p className="text-slate-400 text-center py-4">Loading your tasks...</p>
+                      <p className="text-slate-400 text-center py-4">
+                        Loading your tasks...
+                      </p>
                     ) : tasks.length > 0 ? (
                       tasks.slice(0, 3).map((t) => (
-                        <div key={t._id} onClick={() => setActiveTab("tasks")} className="group bg-white p-5 rounded-2xl border border-slate-200 hover:border-blue-200 hover:shadow-sm transition-all duration-300 flex items-center justify-between cursor-pointer">
+                        <div
+                          key={t._id}
+                          onClick={() => setActiveTab("tasks")}
+                          className="group bg-white p-5 rounded-2xl border border-slate-200 hover:border-blue-200 hover:shadow-sm transition-all duration-300 flex items-center justify-between cursor-pointer"
+                        >
                           <div className="flex items-center space-x-4">
-                            <div className={`flex items-center justify-center w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl ${t.status?.toLowerCase() === "completed" ? "bg-emerald-50 text-emerald-500" : t.status?.toLowerCase() === "pending" ? "bg-orange-50 text-orange-500" : "bg-blue-50 text-blue-500"}`}>
-                              {t.status?.toLowerCase() === "completed" && <CheckCircle size={20} className="md:w-6 md:h-6" />}
-                              {t.status?.toLowerCase() === "pending" && <Clock size={20} className="md:w-6 md:h-6" />}
-                              {t.status?.toLowerCase() === "in progress" && <Activity size={20} className="md:w-6 md:h-6" />}
+                            <div
+                              className={`flex items-center justify-center w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl ${t.status?.toLowerCase() === "completed" ? "bg-emerald-50 text-emerald-500" : t.status?.toLowerCase() === "pending" ? "bg-orange-50 text-orange-500" : "bg-blue-50 text-blue-500"}`}
+                            >
+                              {t.status?.toLowerCase() === "completed" && (
+                                <CheckCircle
+                                  size={20}
+                                  className="md:w-6 md:h-6"
+                                />
+                              )}
+                              {t.status?.toLowerCase() === "pending" && (
+                                <Clock size={20} className="md:w-6 md:h-6" />
+                              )}
+                              {t.status?.toLowerCase() === "in progress" && (
+                                <Activity size={20} className="md:w-6 md:h-6" />
+                              )}
                             </div>
                             <div>
                               <h4 className="text-base md:text-lg font-bold text-slate-800 mb-1">
-                                {t.title} {/* 👈 Mongoose se aayi title field */}
+                                {t.title}{" "}
+                                {/* 👈 Mongoose se aayi title field */}
                               </h4>
                               <div className="flex flex-wrap items-center gap-2 md:gap-3 text-xs font-semibold text-slate-400">
                                 <span className="flex items-center bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                                  <Clock size={12} className="mr-1.5" /> {new Date(t.createdAt).toLocaleDateString()}
+                                  <Clock size={12} className="mr-1.5" />{" "}
+                                  {new Date(t.createdAt).toLocaleDateString()}
                                 </span>
-                                <span className={`px-2 py-1 rounded-md border ${t.status?.toLowerCase() === "completed" ? "text-emerald-600 bg-emerald-50 border-emerald-100" : t.status?.toLowerCase() === "pending" ? "text-orange-600 bg-orange-50 border-orange-100" : "text-blue-600 bg-blue-50 border-blue-100"}`}>
+                                <span
+                                  className={`px-2 py-1 rounded-md border ${t.status?.toLowerCase() === "completed" ? "text-emerald-600 bg-emerald-50 border-emerald-100" : t.status?.toLowerCase() === "pending" ? "text-orange-600 bg-orange-50 border-orange-100" : "text-blue-600 bg-blue-50 border-blue-100"}`}
+                                >
                                   {t.status}
                                 </span>
                               </div>
                             </div>
                           </div>
                           <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors text-slate-300 border border-slate-100 group-hover:border-blue-600">
-                            <ChevronRight size={18} className="group-hover:translate-x-0.5 transition-transform" />
+                            <ChevronRight
+                              size={18}
+                              className="group-hover:translate-x-0.5 transition-transform"
+                            />
                           </div>
                         </div>
                       ))
@@ -358,11 +483,23 @@ const MPIDCTracker = () => {
               <div className="animate-in fade-in slide-in-from-right-8 duration-500 mt-2 md:mt-0">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6">
                   <div>
-                    <button onClick={() => { setActiveTab("dashboard"); setFilterStatus("All"); }} className="flex items-center text-slate-400 font-semibold text-sm mb-4 hover:text-blue-600 transition-colors group">
-                      <ArrowLeft size={16} className="mr-2 group-hover:-translate-x-1 transition-transform" /> Back to Overview
+                    <button
+                      onClick={() => {
+                        setActiveTab("dashboard");
+                        setFilterStatus("All");
+                      }}
+                      className="flex items-center text-slate-400 font-semibold text-sm mb-4 hover:text-blue-600 transition-colors group"
+                    >
+                      <ArrowLeft
+                        size={16}
+                        className="mr-2 group-hover:-translate-x-1 transition-transform"
+                      />{" "}
+                      Back to Overview
                     </button>
                     <h1 className="text-3xl md:text-4xl font-bold text-slate-900 tracking-tight">
-                      {filterStatus === "All" ? "All Assignments" : `${filterStatus} Tasks`}
+                      {filterStatus === "All"
+                        ? "All Assignments"
+                        : `${filterStatus} Tasks`}
                     </h1>
                   </div>
 
@@ -381,53 +518,102 @@ const MPIDCTracker = () => {
 
                 <div className="space-y-4">
                   {loading ? (
-                     <div className="text-center p-10 font-bold text-slate-400 animate-pulse">Loading tasks from database...</div>
+                    <div className="text-center p-10 font-bold text-slate-400 animate-pulse">
+                      Loading tasks from database...
+                    </div>
                   ) : filteredTasks.length > 0 ? (
                     filteredTasks.map((t) => (
-                      // 👇 YAHAN SE TERA NAYA CARD SHURU HOTA HAI
-                      <div key={t._id} className="group bg-white p-5 md:p-6 rounded-2xl border border-slate-200 hover:border-blue-200 hover:shadow-md transition-all duration-300 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer">
-                        
+                      <div
+                        key={t._id}
+                        className="group bg-white p-5 md:p-6 rounded-2xl border border-slate-200 hover:border-blue-200 hover:shadow-md transition-all duration-300 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer"
+                      >
                         <div className="flex items-center space-x-5">
-                          <div className={`flex items-center justify-center w-12 h-12 rounded-2xl ${t.status?.toLowerCase() === "completed" ? "bg-emerald-50 text-emerald-500" : t.status?.toLowerCase() === "pending" ? "bg-orange-50 text-orange-500" : "bg-blue-50 text-blue-500"}`}>
-                            {t.status?.toLowerCase() === "completed" && <CheckCircle size={24} />}
-                            {t.status?.toLowerCase() === "pending" && <Clock size={24} />}
-                            {t.status?.toLowerCase() === "in progress" && <Activity size={24} />}
+                          <div
+                            className={`flex items-center justify-center w-12 h-12 rounded-2xl ${t.status?.toLowerCase() === "completed" ? "bg-emerald-50 text-emerald-500" : t.status?.toLowerCase() === "pending" ? "bg-orange-50 text-orange-500" : "bg-blue-50 text-blue-500"}`}
+                          >
+                            {t.status?.toLowerCase() === "completed" && (
+                              <CheckCircle size={24} />
+                            )}
+                            {t.status?.toLowerCase() === "pending" && (
+                              <Clock size={24} />
+                            )}
+                            {t.status?.toLowerCase() === "in progress" && (
+                              <Activity size={24} />
+                            )}
                           </div>
                           <div>
-                            <h4 className="text-lg font-bold text-slate-800 mb-1">{t.title}</h4>
-                            <p className="text-sm text-slate-500 mb-2">{t.description}</p>
+                            <h4 className="text-lg font-bold text-slate-800 mb-1">
+                              {t.title}
+                            </h4>
+                            <p className="text-sm text-slate-500 mb-2">
+                              {t.description}
+                            </p>
                             <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-400">
                               <span className="flex items-center bg-slate-50 px-2.5 py-1 rounded-md border border-slate-100">
-                                <Clock size={12} className="mr-1.5" /> {new Date(t.createdAt).toLocaleDateString()}
+                                <Clock size={12} className="mr-1.5" />{" "}
+                                {new Date(t.createdAt).toLocaleDateString()}
                               </span>
-                              <span className={`px-2.5 py-1 rounded-md border ${t.priority === "High" ? "text-red-600 border-red-200 bg-red-50" : t.priority === "Medium" ? "text-orange-600 border-orange-200 bg-orange-50" : "text-blue-600 border-blue-200 bg-blue-50"}`}>
+                              <span
+                                className={`px-2.5 py-1 rounded-md border ${t.priority === "High" ? "text-red-600 border-red-200 bg-red-50" : t.priority === "Medium" ? "text-orange-600 border-orange-200 bg-orange-50" : "text-blue-600 border-blue-200 bg-blue-50"}`}
+                              >
                                 {t.priority} Priority
                               </span>
                             </div>
                           </div>
                         </div>
 
-                        {/* 👇 YAHAN TERA STATUS UPDATE DROPDOWN HAI */}
-                        <div className="flex items-center justify-end w-full md:w-auto mt-2 md:mt-0">
+                        {/* 👇 YAHAN DROPDOWN AUR TIMELINE BUTTON EK SATH HAIN */}
+                        <div className="flex items-center justify-end w-full md:w-auto mt-2 md:mt-0 gap-3">
+                          
+                          {/* 🕒 TIMELINE BUTTON FOR EMPLOYEE */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation(); // Taki card click trigger na ho
+                              setActiveTask(t);
+                              setIsTimelineOpen(true);
+                            }}
+                            className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all shadow-sm border border-slate-200 bg-white"
+                            title="View Chat / Timeline"
+                          >
+                            <History size={18} />
+                          </button>
+
                           <select
                             value={t.status}
-                            onChange={(e) => handleStatusUpdate(t._id, e.target.value)}
-                            onClick={(e) => e.stopPropagation()} 
+                            onChange={(e) =>
+                              handleStatusUpdate(t._id, e.target.value)
+                            }
+                            onClick={(e) => e.stopPropagation()}
                             className={`appearance-none cursor-pointer outline-none font-bold text-xs uppercase tracking-wider px-4 py-2.5 rounded-xl border-2 transition-all duration-300 shadow-sm
-                              ${t.status === "Completed" 
-                                ? "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100" 
-                                : t.status === "In Progress" 
-                                ? "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100" 
-                                : "bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100"
+                              ${
+                                t.status === "Completed"
+                                  ? "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100"
+                                  : t.status === "In Progress"
+                                    ? "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100"
+                                    : "bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100"
                               }
                             `}
                           >
-                            <option value="Pending" className="text-slate-700 font-semibold bg-white">⌛ Pending</option>
-                            <option value="In Progress" className="text-slate-700 font-semibold bg-white">🚀 In Progress</option>
-                            <option value="Completed" className="text-slate-700 font-semibold bg-white">✅ Completed</option>
+                            <option
+                              value="Pending"
+                              className="text-slate-700 font-semibold bg-white"
+                            >
+                              ⌛ Pending
+                            </option>
+                            <option
+                              value="In Progress"
+                              className="text-slate-700 font-semibold bg-white"
+                            >
+                              🚀 In Progress
+                            </option>
+                            <option
+                              value="Completed"
+                              className="text-slate-700 font-semibold bg-white"
+                            >
+                              ✅ Completed
+                            </option>
                           </select>
                         </div>
-
                       </div>
                     ))
                   ) : (
@@ -435,8 +621,13 @@ const MPIDCTracker = () => {
                       <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
                         <CheckCircle size={32} />
                       </div>
-                      <h3 className="text-xl font-bold text-slate-800 mb-2">No tasks found</h3>
-                      <p className="text-slate-400 font-medium">You have zero {filterStatus.toLowerCase()} tasks right now.</p>
+                      <h3 className="text-xl font-bold text-slate-800 mb-2">
+                        No tasks found
+                      </h3>
+                      <p className="text-slate-400 font-medium">
+                        You have zero {filterStatus.toLowerCase()} tasks right
+                        now.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -447,20 +638,142 @@ const MPIDCTracker = () => {
           </div>
         </main>
       </div>
-      
+
       {/* 🚀 Mobile Bottom Navigation (Smart Glassmorphism) */}
       <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-sm z-50">
         <nav className="bg-white/80 backdrop-blur-xl border border-slate-200 shadow-[0_10px_40px_rgb(0,0,0,0.1)] rounded-full p-2 flex relative">
-          <button onClick={() => { setActiveTab("dashboard"); setFilterStatus("All"); }} className={`flex-1 relative z-10 flex flex-col items-center justify-center py-2.5 rounded-full transition-colors duration-300 ${activeTab === "dashboard" ? "text-blue-600 bg-blue-50" : "text-slate-500 hover:text-slate-800"}`}>
+          <button
+            onClick={() => {
+              setActiveTab("dashboard");
+              setFilterStatus("All");
+            }}
+            className={`flex-1 relative z-10 flex flex-col items-center justify-center py-2.5 rounded-full transition-colors duration-300 ${activeTab === "dashboard" ? "text-blue-600 bg-blue-50" : "text-slate-500 hover:text-slate-800"}`}
+          >
             <LayoutDashboard size={22} strokeWidth={2.5} className="mb-1" />
-            <span className="text-[10px] font-bold tracking-widest uppercase">Home</span>
+            <span className="text-[10px] font-bold tracking-widest uppercase">
+              Home
+            </span>
           </button>
-          <button onClick={() => setActiveTab("tasks")} className={`flex-1 relative z-10 flex flex-col items-center justify-center py-2.5 rounded-full transition-colors duration-300 ${activeTab === "tasks" ? "text-blue-600 bg-blue-50" : "text-slate-500 hover:text-slate-800"}`}>
+          <button
+            onClick={() => setActiveTab("tasks")}
+            className={`flex-1 relative z-10 flex flex-col items-center justify-center py-2.5 rounded-full transition-colors duration-300 ${activeTab === "tasks" ? "text-blue-600 bg-blue-50" : "text-slate-500 hover:text-slate-800"}`}
+          >
             <ClipboardList size={22} strokeWidth={2.5} className="mb-1" />
-            <span className="text-[10px] font-bold tracking-widest uppercase">Tasks</span>
+            <span className="text-[10px] font-bold tracking-widest uppercase">
+              Tasks
+            </span>
           </button>
         </nav>
       </div>
+      {/* --- EMPLOYEE TIMELINE DRAWER (PRO VERSION) --- */}
+<div
+  className={`fixed inset-0 z-[60] overflow-hidden transition-all duration-500 ${isTimelineOpen ? "visible" : "invisible"}`}
+>
+  {/* Backdrop */}
+  <div
+    className={`absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-500 ${isTimelineOpen ? "opacity-100" : "opacity-0"}`}
+    onClick={() => setIsTimelineOpen(false)}
+  />
+
+  <div
+    className={`absolute inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl flex flex-col transform transition-transform duration-500 ease-in-out ${isTimelineOpen ? "translate-x-0" : "translate-x-full"}`}
+  >
+    {/* Header */}
+    <div className="p-6 border-b flex items-center justify-between bg-white z-10 shadow-sm">
+      <div>
+        <h2 className="text-xl font-black text-slate-800 tracking-tight">
+          TASK CHAT
+        </h2>
+        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+          Ref: {activeTask?.title}
+        </p>
+      </div>
+      <button
+        onClick={() => setIsTimelineOpen(false)}
+        className="p-2 hover:bg-slate-100 rounded-full transition-all"
+      >
+        <X size={24} className="text-slate-400" />
+      </button>
+    </div>
+
+    {/* Chat Content (WhatsApp Style for Employee) */}
+    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#E5ECE8] custom-scrollbar">
+      {activeTask?.timeline?.length > 0 ? (
+        activeTask.timeline.map((item, index) => {
+          const uniqueKey = item._id || index;
+          
+          // 🔥 EMPLOYEE LOGIC: Employee (Me) Right me, Admin (ravi ke tiwari) Left me
+          const isMe = item.addedBy.role === "Employee";
+          const isAdmin = item.addedBy.role === "Admin";
+
+          return (
+            <div
+              key={uniqueKey}
+              className={`flex w-full ${isMe ? "justify-end" : "justify-start"} transition-all duration-300`}
+            >
+              <div
+                className={`max-w-[80%] md:max-w-[75%] px-3 py-2 rounded-2xl shadow-sm flex flex-col relative ${
+                  isMe
+                    ? "bg-[#D9FDD3] text-slate-800 rounded-tr-none" // Right Side (Green)
+                    : "bg-white text-slate-800 rounded-tl-none border border-slate-100" // Left Side (White)
+                }`}
+              >
+                {/* Sender Name */}
+                <span className={`text-[10px] font-black mb-1 uppercase tracking-wide ${isMe ? "text-emerald-700" : "text-blue-600"}`}>
+                  {isAdmin ? "ravi ke tiwari" : "Me"}
+                </span>
+
+                {/* Message Text */}
+                <p className="text-[13px] text-slate-800 font-medium leading-relaxed whitespace-pre-wrap break-words">
+                  {item.note}
+                </p>
+
+                {/* Time */}
+                <span className="text-[9px] text-slate-500 self-end mt-1 font-semibold italic">
+                  {new Date(item.timestamp).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </div>
+            </div>
+          );
+        })
+      ) : (
+        <div className="flex flex-col items-center justify-center h-full text-slate-400">
+          <p className="text-sm italic font-medium bg-white/50 px-4 py-2 rounded-full shadow-sm">
+            No messages yet. Send an update to Admin!
+          </p>
+        </div>
+      )}
+
+      {/* 🔥 MAGIC SCROLL ANCHOR */}
+      <div ref={chatEndRef} className="h-1" />
+    </div>
+
+    {/* Bottom Input Area */}
+    <div className="p-4 border-t bg-white z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <div className="relative flex items-center">
+        <input
+          type="text"
+          value={timelineNote}
+          onChange={(e) => setTimelineNote(e.target.value)}
+          placeholder="Message admin..."
+          className="w-full bg-slate-100 border-none rounded-full px-5 py-3.5 pr-14 text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all shadow-inner"
+          onKeyDown={(e) =>
+            e.key === "Enter" && handleAddTimelineNote(activeTask._id)
+          }
+        />
+        <button
+          onClick={() => handleAddTimelineNote(activeTask._id)}
+          className="absolute right-1.5 p-2.5 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 shadow-md shadow-emerald-200 transition-all flex items-center justify-center"
+        >
+          <Send size={16} className="ml-1" />
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
     </div>
   );
 };

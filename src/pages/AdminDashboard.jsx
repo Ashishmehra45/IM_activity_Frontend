@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from "react";
 import axios from "axios";
 import API_BASE_URL from "../config/config"; // 👈 API base URL import karo
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   LayoutDashboard,
-   Edit3,
-   Trash2,
+  History,
+  X,
+  Edit3,
+  Trash2,
   Users,
   Briefcase,
   CheckCircle,
@@ -40,7 +42,7 @@ const MPIDCAdminDashboard = () => {
   // Nayi state sirf us employee ke tasks ke liye
   const [currentEmployeeTasks, setCurrentEmployeeTasks] = useState([]);
   const [allTasks, setAllTasks] = useState([]);
-// 1. Tera banaya hua function (Ye theek hai)
+  // 1. Tera banaya hua function (Ye theek hai)
   const fetchAllTasks = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -48,14 +50,61 @@ const MPIDCAdminDashboard = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       console.log("Backend se ye Tasks aaye:", res.data); // 👈 Browser console me check karne ke liye
-      setAllTasks(res.data); 
+      setAllTasks(res.data);
     } catch (err) {
       console.error("Global tasks fetch error", err);
     }
   };
 
-  // 2. 🔥 YAHAN GAlTI THI: Ise page load par call karna zaroori hai!
-  // 👇 IS PURANE USE-EFFECT KO REPLACE KAR DE
+  const [isTimelineOpen, setIsTimelineOpen] = useState(false);
+  const [activeTask, setActiveTask] = useState(null); // Jis task ki timeline dekh rahe hain
+  const [timelineNote, setTimelineNote] = useState("");
+
+  const handleAddTimelineNote = async (taskId) => {
+    if (!timelineNote.trim()) return toast.error("Note cannot be empty!");
+
+    try {
+      const token = localStorage.getItem("token");
+
+      // 1. API Call
+      const res = await axios.post(
+        `${API_BASE_URL}/admin/${taskId}/timeline`,
+        { note: timelineNote },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      if (res.data.success) {
+        // 2. 🔥 INSTANT UI UPDATE (No glitches here)
+        // Ensure kar tera backend response me PURI (Old + New) timeline bhej raha ho
+        setActiveTask((prev) => ({
+          ...prev,
+          timeline: res.data.timeline,
+        }));
+
+        // 3. Input clear karo
+        setTimelineNote("");
+
+        // 4. 🔥 PRO FIX: Background sync ko thoda time do (Race condition avoided)
+        // Isse UI nahi atkega, aur background me list bhi update ho jayegi
+        setTimeout(() => {
+          fetchAllTasks();
+        }, 800);
+      }
+    } catch (err) {
+      toast.error("Network issue, message not sent!");
+    }
+  };
+
+  // 1. Ref banalo
+  const chatEndRef = useRef(null);
+
+  // 2. Scroll karne wala logic
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [activeTask?.timeline, isTimelineOpen]); // Jab drawer khule ya naya msg aaye
+
   useEffect(() => {
     // 1. LocalStorage se admin ka data nikalo
     const storedUser = localStorage.getItem("user");
@@ -67,8 +116,8 @@ const MPIDCAdminDashboard = () => {
 
     // 2. Baaki API calls
     fetchEmployees();
-    fetchAllTasks(); 
-  },[] );
+    fetchAllTasks();
+  }, []);
 
   const fetchSpecificTasks = async () => {
     if (!selectedEmployee) return; // Agar koi select nahi hai toh mat chalo
@@ -176,8 +225,6 @@ const MPIDCAdminDashboard = () => {
     [employees],
   );
 
-  
-
   const approvedStaff = useMemo(
     () => employees.filter((emp) => emp.isApproved && emp.role !== "Admin"),
     [employees],
@@ -244,7 +291,7 @@ const MPIDCAdminDashboard = () => {
 
   // 🧠 Smart Calculations
   // 🧠 Smart Calculations
- const filteredTasks = useMemo(() => {
+  const filteredTasks = useMemo(() => {
     return allTasks.filter((t) => {
       const matchesStatus = taskFilter === "All" || t.status === taskFilter;
       const matchesSearch =
@@ -254,49 +301,56 @@ const MPIDCAdminDashboard = () => {
     });
   }, [allTasks, taskFilter, searchQuery]);
 
- 
-// 🗑️ Delete Handler
+  // 🗑️ Delete Handler
   const handleDeleteTask = (taskId) => {
     // Check karo ki koi employee selected hai ya nahi
     if (!selectedEmployee) return toast.error("Employee select nahi hai!");
 
     const employeeId = selectedEmployee._id;
 
-    toast.custom((t) => (
-      <div className="bg-white p-6 rounded-2xl shadow-2xl border-l-4 border-red-500">
-        <p className="font-bold text-slate-900">Delete Task?</p>
-        <p className="text-sm text-slate-500">
-          Are you sure you want to delete this task for {selectedEmployee.name}?
-        </p>
-        <div className="mt-4 flex gap-2">
-          <button onClick={() => toast.dismiss(t.id)} className="...">Cancel</button>
-          <button 
-            onClick={async () => {
-              toast.dismiss(t.id);
-              try {
-                const token = localStorage.getItem("token");
-                // API Call with BOTH IDs
-                await axios.delete(`${API_BASE_URL}/admin/delete-task/${employeeId}/${taskId}`, {
-                  headers: { Authorization: `Bearer ${token}` },
-                });
-                toast.success("Task Deleted! 🗑️");
-                
-                // Refresh data
-                fetchSpecificTasks(); // Us employee ki list refresh
-                fetchAllTasks();      // Global list refresh
-              } catch (err) {
-                toast.error(err.response?.data?.message || "Delete failed");
-              }
-            }} 
-            className="bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold"
-          >
-            Yes, Delete it!
-          </button>
-        </div>
-      </div>
-    ), { duration: 5000 });
-  };
+    toast.custom(
+      (t) => (
+        <div className="bg-white p-6 rounded-2xl shadow-2xl border-l-4 border-red-500">
+          <p className="font-bold text-slate-900">Delete Task?</p>
+          <p className="text-sm text-slate-500">
+            Are you sure you want to delete this task for{" "}
+            {selectedEmployee.name}?
+          </p>
+          <div className="mt-4 flex gap-2">
+            <button onClick={() => toast.dismiss(t.id)} className="...">
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                toast.dismiss(t.id);
+                try {
+                  const token = localStorage.getItem("token");
+                  // API Call with BOTH IDs
+                  await axios.delete(
+                    `${API_BASE_URL}/admin/delete-task/${employeeId}/${taskId}`,
+                    {
+                      headers: { Authorization: `Bearer ${token}` },
+                    },
+                  );
+                  toast.success("Task Deleted! 🗑️");
 
+                  // Refresh data
+                  fetchSpecificTasks(); // Us employee ki list refresh
+                  fetchAllTasks(); // Global list refresh
+                } catch (err) {
+                  toast.error(err.response?.data?.message || "Delete failed");
+                }
+              }}
+              className="bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold"
+            >
+              Yes, Delete it!
+            </button>
+          </div>
+        </div>
+      ),
+      { duration: 5000 },
+    );
+  };
 
   const handleEmployeeClick = (employee) => {
     setSelectedEmployee(employee);
@@ -383,18 +437,22 @@ const MPIDCAdminDashboard = () => {
           </button>
         </nav>
 
-     {/* 👤 Sidebar Profile & Logout */}
+        {/* 👤 Sidebar Profile & Logout */}
         <div className="mt-auto pt-8 border-t border-white/10">
           <div className="flex items-center justify-between group p-2 -ml-2 rounded-xl transition-all">
             <div className="flex items-center gap-3">
-              
               {/* 1. Dynamic Initials (Ultra Safe Logic) */}
               <div className="w-10 h-10 rounded-full bg-slate-800 border-2 border-emerald-500 flex items-center justify-center font-bold text-sm text-white uppercase">
-                {user?.name 
-                  ? user.name.trim().split(/\s+/).map(n => n[0]).join('').substring(0, 2) 
+                {user?.name
+                  ? user.name
+                      .trim()
+                      .split(/\s+/)
+                      .map((n) => n[0])
+                      .join("")
+                      .substring(0, 2)
                   : "O"}
               </div>
-              
+
               <div className="text-left overflow-hidden">
                 {/* 2. Dynamic Real Name */}
                 <p className="text-sm font-bold text-white truncate w-32">
@@ -423,7 +481,7 @@ const MPIDCAdminDashboard = () => {
       <div className="flex-1 flex flex-col min-w-0">
         {/* ✨ Mobile Header */}
         {/* ✨ Mobile Header */}
-       {/* ✨ Mobile Header */}
+        {/* ✨ Mobile Header */}
         <header className="md:hidden sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center shadow-sm">
@@ -442,11 +500,16 @@ const MPIDCAdminDashboard = () => {
             >
               <LogOut size={22} />
             </button>
-            
+
             {/* 🔥 DYNAMIC INITIALS (Mobile) */}
             <div className="w-9 h-9 rounded-full bg-slate-50 border-2 border-emerald-500 flex items-center justify-center font-bold text-sm text-slate-700 uppercase">
-              {user?.name 
-                ? user.name.trim().split(/\s+/).map(n => n[0]).join('').substring(0, 2) 
+              {user?.name
+                ? user.name
+                    .trim()
+                    .split(/\s+/)
+                    .map((n) => n[0])
+                    .join("")
+                    .substring(0, 2)
                 : "AD"}
             </div>
           </div>
@@ -455,7 +518,7 @@ const MPIDCAdminDashboard = () => {
         {/* 🚀 Main Scrolling Area */}
         <main className="flex-1 pb-28 md:pb-12 overflow-y-auto pt-6 md:pt-10">
           <div className="p-5 md:px-12 max-w-6xl mx-auto">
-         {/* 📊 OVERVIEW TAB */}
+            {/* 📊 OVERVIEW TAB */}
             {activeTab === "overview" && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <header className="mb-8">
@@ -470,23 +533,35 @@ const MPIDCAdminDashboard = () => {
                 {/* 👥 1. TEAM SNAPSHOT (Alag kar diya taaki mix na ho) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5 mb-10">
                   {/* 🟢 Verified Staff */}
-                  <div 
-                    onClick={() => { setActiveTab("team"); setSelectedEmployee(null); }}
+                  <div
+                    onClick={() => {
+                      setActiveTab("team");
+                      setSelectedEmployee(null);
+                    }}
                     className="cursor-pointer bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-emerald-200 transition-all group"
                   >
                     <div className="flex justify-between items-start mb-4">
                       <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
                         <Users size={24} />
                       </div>
-                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">Active</span>
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
+                        Active
+                      </span>
                     </div>
-                    <h3 className="text-4xl font-black text-slate-900 mb-1">{approvedStaff.length}</h3>
-                    <p className="text-slate-500 text-sm font-semibold">Verified Officers</p>
+                    <h3 className="text-4xl font-black text-slate-900 mb-1">
+                      {approvedStaff.length}
+                    </h3>
+                    <p className="text-slate-500 text-sm font-semibold">
+                      Verified Officers
+                    </p>
                   </div>
 
                   {/* 🟠 Pending Team Requests */}
-                  <div 
-                    onClick={() => { setActiveTab("team"); setSelectedEmployee(null); }}
+                  <div
+                    onClick={() => {
+                      setActiveTab("team");
+                      setSelectedEmployee(null);
+                    }}
                     className="cursor-pointer bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-orange-200 transition-all group"
                   >
                     <div className="flex justify-between items-start mb-4">
@@ -494,83 +569,123 @@ const MPIDCAdminDashboard = () => {
                         <Clock size={24} />
                       </div>
                     </div>
-                    <h3 className="text-4xl font-black text-orange-600 mb-1">{pendingRequests.length}</h3>
-                    <p className="text-slate-500 text-sm font-semibold">Pending Access</p>
+                    <h3 className="text-4xl font-black text-orange-600 mb-1">
+                      {pendingRequests.length}
+                    </h3>
+                    <p className="text-slate-500 text-sm font-semibold">
+                      Pending Access
+                    </p>
                   </div>
                 </div>
 
                 {/* 📋 2. TASKS SNAPSHOT (Ekdum Split kiya hua) */}
-                <h3 className="text-lg font-bold text-slate-800 mb-4">Global Tasks Tracking</h3>
+                <h3 className="text-lg font-bold text-slate-800 mb-4">
+                  Global Tasks Tracking
+                </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-5 mb-8">
-                  
                   {/* 🔵 Card 1: TOTAL TASKS */}
-                  <div 
-                    onClick={() => { setActiveTab("tasks"); setTaskFilter("All"); }}
+                  <div
+                    onClick={() => {
+                      setActiveTab("tasks");
+                      setTaskFilter("All");
+                    }}
                     className="cursor-pointer bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-blue-200 transition-all group"
                   >
                     <div className="flex justify-between items-start mb-4">
                       <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
                         <Briefcase size={24} />
                       </div>
-                      <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">All</span>
+                      <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
+                        All
+                      </span>
                     </div>
                     <h3 className="text-4xl font-black text-slate-900 mb-1">
                       {allTasks?.length || 0}
                     </h3>
-                    <p className="text-slate-500 text-sm font-semibold">Total Tasks</p>
+                    <p className="text-slate-500 text-sm font-semibold">
+                      Total Tasks
+                    </p>
                   </div>
 
                   {/* 🔴 Card 2: PENDING TASKS */}
-                  <div 
-                    onClick={() => { setActiveTab("tasks"); setTaskFilter("Pending"); }}
+                  <div
+                    onClick={() => {
+                      setActiveTab("tasks");
+                      setTaskFilter("Pending");
+                    }}
                     className="cursor-pointer bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-red-200 transition-all group"
                   >
                     <div className="flex justify-between items-start mb-4">
                       <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
                         <AlertTriangle size={24} />
                       </div>
-                      <span className="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded-lg">Wait</span>
+                      <span className="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded-lg">
+                        Wait
+                      </span>
                     </div>
                     <h3 className="text-4xl font-black text-red-600 mb-1">
-                      {allTasks?.filter(t => t.status?.toLowerCase().trim() === 'pending' || t.status?.toLowerCase().trim() === 'overdue').length || 0}
+                      {allTasks?.filter(
+                        (t) =>
+                          t.status?.toLowerCase().trim() === "pending" ||
+                          t.status?.toLowerCase().trim() === "overdue",
+                      ).length || 0}
                     </h3>
-                    <p className="text-slate-500 text-sm font-semibold">Pending Tasks</p>
+                    <p className="text-slate-500 text-sm font-semibold">
+                      Pending Tasks
+                    </p>
                   </div>
 
                   {/* 🟡 Card 3: IN PROGRESS TASKS */}
-                  <div 
-                    onClick={() => { setActiveTab("tasks"); setTaskFilter("In Progress"); }}
+                  <div
+                    onClick={() => {
+                      setActiveTab("tasks");
+                      setTaskFilter("In Progress");
+                    }}
                     className="cursor-pointer bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-amber-200 transition-all group"
                   >
                     <div className="flex justify-between items-start mb-4">
                       <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
                         <Activity size={24} />
                       </div>
-                      <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">Work</span>
+                      <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">
+                        Work
+                      </span>
                     </div>
                     <h3 className="text-4xl font-black text-amber-600 mb-1">
-                      {allTasks?.filter(t => t.status?.toLowerCase().trim() === 'in progress').length || 0}
+                      {allTasks?.filter(
+                        (t) => t.status?.toLowerCase().trim() === "in progress",
+                      ).length || 0}
                     </h3>
-                    <p className="text-slate-500 text-sm font-semibold">In Progress</p>
+                    <p className="text-slate-500 text-sm font-semibold">
+                      In Progress
+                    </p>
                   </div>
 
                   {/* 🟢 Card 4: COMPLETED TASKS */}
-                  <div 
-                    onClick={() => { setActiveTab("tasks"); setTaskFilter("Completed"); }}
+                  <div
+                    onClick={() => {
+                      setActiveTab("tasks");
+                      setTaskFilter("Completed");
+                    }}
                     className="cursor-pointer bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm hover:shadow-lg hover:border-emerald-200 transition-all group"
                   >
                     <div className="flex justify-between items-start mb-4">
                       <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
                         <CheckCircle size={24} />
                       </div>
-                      <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">Done</span>
+                      <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">
+                        Done
+                      </span>
                     </div>
                     <h3 className="text-4xl font-black text-emerald-600 mb-1">
-                      {allTasks?.filter(t => t.status?.toLowerCase().trim() === 'completed').length || 0}
+                      {allTasks?.filter(
+                        (t) => t.status?.toLowerCase().trim() === "completed",
+                      ).length || 0}
                     </h3>
-                    <p className="text-slate-500 text-sm font-semibold">Completed Tasks</p>
+                    <p className="text-slate-500 text-sm font-semibold">
+                      Completed Tasks
+                    </p>
                   </div>
-
                 </div>
               </div>
             )}
@@ -765,99 +880,123 @@ const MPIDCAdminDashboard = () => {
                         </div>
                       </div>
 
-
                       {/* 🔥 LIVE ASLI TASKS KI LIST */}
                       <h3 className="text-xl font-bold text-slate-900 mb-5 border-t border-slate-100 pt-8">
                         Assigned Tasks
                       </h3>
 
-                    <div className="space-y-3">
-  {currentEmployeeTasks.length > 0 ? (
-    currentEmployeeTasks.map((t) => (
-      <div
-        key={t._id}
-        className="bg-white p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm hover:shadow-md transition-all group"
-      >
-        <div className="flex-1">
-          {/* 🔥 TITLE & PRIORITY BADGE */}
-          <div className="flex items-center gap-3 mb-1">
-            <h4 className="font-bold text-slate-800 text-lg">
-              {t.title}
-            </h4>
-            <span
-              className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-md border text-[10px] font-black uppercase tracking-wider ${
-                t.priority === "High"
-                  ? "bg-red-50 text-red-600 border-red-200"
-                  : t.priority === "Medium"
-                    ? "bg-orange-50 text-orange-600 border-orange-200"
-                    : "bg-blue-50 text-blue-600 border-blue-200"
-              }`}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  t.priority === "High"
-                    ? "bg-red-500 animate-pulse"
-                    : t.priority === "Medium"
-                      ? "bg-orange-500"
-                      : "bg-blue-500"
-                }`}
-              ></span>
-              {t.priority} Priority
-            </span>
-          </div>
+                      <div className="space-y-3">
+                        {currentEmployeeTasks.length > 0 ? (
+                          currentEmployeeTasks.map((t) => (
+                            <div
+                              key={t._id}
+                              className="bg-white p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm hover:shadow-md transition-all group"
+                            >
+                              <div className="flex-1">
+                                {/* 🔥 TITLE & PRIORITY BADGE */}
+                                <div className="flex items-center gap-3 mb-1">
+                                  <h4 className="font-bold text-slate-800 text-lg">
+                                    {t.title}
+                                  </h4>
+                                  <span
+                                    className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-md border text-[10px] font-black uppercase tracking-wider ${
+                                      t.priority === "High"
+                                        ? "bg-red-50 text-red-600 border-red-200"
+                                        : t.priority === "Medium"
+                                          ? "bg-orange-50 text-orange-600 border-orange-200"
+                                          : "bg-blue-50 text-blue-600 border-blue-200"
+                                    }`}
+                                  >
+                                    <span
+                                      className={`w-1.5 h-1.5 rounded-full ${
+                                        t.priority === "High"
+                                          ? "bg-red-500 animate-pulse"
+                                          : t.priority === "Medium"
+                                            ? "bg-orange-500"
+                                            : "bg-blue-500"
+                                      }`}
+                                    ></span>
+                                    {t.priority} Priority
+                                  </span>
+                                </div>
 
-          {/* DESCRIPTION & DATE */}
-          <p className="text-sm text-slate-600 mb-2 max-w-2xl">
-            {t.description}
-          </p>
-          <p className="text-xs text-slate-400 font-semibold flex items-center">
-            <Clock size={12} className="mr-1" /> Assigned:{" "}
-            {new Date(t.createdAt).toLocaleDateString()}
-          </p>
-        </div>
+                                {/* DESCRIPTION & DATE */}
+                                <p className="text-sm text-slate-600 mb-2 max-w-2xl">
+                                  {t.description}
+                                </p>
+                                <p className="text-xs text-slate-400 font-semibold flex items-center">
+                                  <Clock size={12} className="mr-1" /> Assigned:{" "}
+                                  {new Date(t.createdAt).toLocaleDateString()}
+                                </p>
+                              </div>
 
-        {/* 🛠️ ACTIONS & STATUS */}
-        <div className="flex items-center gap-3 self-end sm:self-center">
-          
-         
-          {/* 🗑️ DELETE BUTTON */}
-          <button 
-            onClick={() => handleDeleteTask(t._id)} // Ye wahi function jo humne abhi banaya
-            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-            title="Delete Task"
-          >
-            <Trash2 size={18} />
-          </button>
+                              {/* 🛠️ ACTIONS & STATUS */}
+                              {/* 🛠️ ACTIONS & STATUS */}
+                              <div className="flex items-center gap-3 self-end sm:self-center">
+                                {/* 🕒 VIEW TIMELINE BUTTON */}
+                                <button
+                                  onClick={() => {
+                                    setActiveTask(t); // Jis task pe click kiya uska data set hoga
+                                    setIsTimelineOpen(true); // Drawer khul jayega
+                                  }}
+                                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all group/btn relative"
+                                  title="View Timeline"
+                                >
+                                  <History size={18} />
+                                  {/* Tooltip for better UX */}
+                                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                    View Timeline
+                                  </span>
+                                </button>
 
-          {/* STATUS BADGE */}
-          <span
-            className={`px-4 py-2 min-w-[100px] rounded-xl border text-xs font-black uppercase tracking-wider text-center ${
-              t.status?.toLowerCase().trim() === "completed"
-                ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                : t.status?.toLowerCase().trim() === "in progress"
-                  ? "bg-amber-50 text-amber-600 border-amber-200"
-                  : t.status?.toLowerCase().trim() === "pending" || t.status?.toLowerCase().trim() === "overdue"
-                    ? "bg-red-50 text-red-600 border-red-200 animate-pulse"
-                    : "bg-slate-50 text-slate-600 border-slate-200"
-            }`}
-          >
-            {t.status}
-          </span>
-        </div>
-      </div>
-    ))
-  ) : (
-    <div className="text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8">
-      <Briefcase
-        size={32}
-        className="mx-auto text-slate-300 mb-3"
-      />
-      <p className="text-slate-500 font-medium">
-        task not finded for this employee.
-      </p>
-    </div>
-  )}
-</div>
+                                {/* 🗑️ DELETE BUTTON */}
+                                <button
+                                  onClick={() => handleDeleteTask(t._id)}
+                                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all group/del relative"
+                                  title="Delete Task"
+                                >
+                                  <Trash2 size={18} />
+                                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover/del:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                                    Delete Task
+                                  </span>
+                                </button>
+
+                                {/* 🏷️ STATUS BADGE */}
+                                <div className="flex items-center justify-center">
+                                  <span
+                                    className={`px-4 py-2 min-w-[110px] rounded-xl border text-[10px] font-black uppercase tracking-wider text-center transition-all ${
+                                      t.status?.toLowerCase().trim() ===
+                                      "completed"
+                                        ? "bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm shadow-emerald-100"
+                                        : t.status?.toLowerCase().trim() ===
+                                            "in progress"
+                                          ? "bg-amber-50 text-amber-600 border-amber-200 shadow-sm shadow-amber-100"
+                                          : t.status?.toLowerCase().trim() ===
+                                                "pending" ||
+                                              t.status?.toLowerCase().trim() ===
+                                                "overdue"
+                                            ? "bg-red-50 text-red-600 border-red-200 animate-pulse shadow-sm shadow-red-100"
+                                            : "bg-slate-50 text-slate-600 border-slate-200 shadow-sm"
+                                    }`}
+                                  >
+                                    {t.status}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8">
+                            <Briefcase
+                              size={32}
+                              className="mx-auto text-slate-300 mb-3"
+                            />
+                            <p className="text-slate-500 font-medium">
+                              task not finded for this employee.
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1177,6 +1316,119 @@ const MPIDCAdminDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* --- TIMELINE DRAWER (PRO VERSION) --- */}
+      <div
+        className={`fixed inset-0 z-[60] overflow-hidden transition-all duration-500 ${isTimelineOpen ? "visible" : "invisible"}`}
+      >
+        {/* Backdrop */}
+        <div
+          className={`absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-500 ${isTimelineOpen ? "opacity-100" : "opacity-0"}`}
+          onClick={() => setIsTimelineOpen(false)}
+        />
+
+        <div
+          className={`absolute inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl flex flex-col transform transition-transform duration-500 ease-in-out ${isTimelineOpen ? "translate-x-0" : "translate-x-full"}`}
+        >
+          {/* Header */}
+          <div className="p-6 border-b flex items-center justify-between bg-white z-10 shadow-sm">
+            <div>
+              <h2 className="text-xl font-black text-slate-800 tracking-tight">
+                TASK TIMELINE
+              </h2>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+                Ref: {activeTask?.title}
+              </p>
+            </div>
+            <button
+              onClick={() => setIsTimelineOpen(false)}
+              className="p-2 hover:bg-slate-100 rounded-full transition-all"
+            >
+              <X size={24} className="text-slate-400" />
+            </button>
+          </div>
+
+          {/* Chat Content (WhatsApp Style) */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#E5ECE8] custom-scrollbar">
+            {activeTask?.timeline?.length > 0 ? (
+              activeTask.timeline.map((item, index) => {
+                // 🔥 PRO FIX 1: Unique Key (Agar item._id hai toh wo use karo, warna index)
+                const uniqueKey = item._id || index;
+                // Check karo message kisne bheja hai
+                const isAdmin = item.addedBy.role === "Admin";
+
+                return (
+                  <div
+                    key={uniqueKey}
+                    className={`flex w-full ${isAdmin ? "justify-end" : "justify-start"} transition-all duration-300`}
+                  >
+                    <div
+                      className={`max-w-[80%] md:max-w-[75%] px-3 py-2 rounded-2xl shadow-sm flex flex-col relative ${
+                        isAdmin
+                          ? "bg-[#D9FDD3] text-slate-800 rounded-tr-none" // Admin Chat bubble (WhatsApp Green)
+                          : "bg-white text-slate-800 rounded-tl-none border border-slate-100" // Employee Chat bubble
+                      }`}
+                    >
+                     
+                      {/* Sender Name */}
+                      <span
+                        className={`text-[10px] font-black mb-1 uppercase tracking-wide ${isAdmin ? "text-emerald-700" : "text-blue-600"}`}
+                      >
+                        {isAdmin ? "ravi ke tiwari" : item.addedBy.name}
+                      </span>
+
+                      {/* Message Text */}
+                      <p className="text-[13px] text-slate-800 font-medium leading-relaxed whitespace-pre-wrap break-words">
+                        {item.note}
+                      </p>
+
+                      {/* Time */}
+                      <span className="text-[9px] text-slate-500 self-end mt-1 font-semibold italic">
+                        {new Date(item.timestamp).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                <p className="text-sm italic font-medium bg-white/50 px-4 py-2 rounded-full shadow-sm">
+                  No activity logged yet. Start the conversation!
+                </p>
+              </div>
+            )}
+
+            {/* 🔥 PRO FIX 2: MAGIC SCROLL ANCHOR (Scroll hamesha yahan aayega) */}
+            <div ref={chatEndRef} className="h-1" />
+          </div>
+
+          {/* Bottom Input Area */}
+          <div className="p-4 border-t bg-white z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                value={timelineNote}
+                onChange={(e) => setTimelineNote(e.target.value)}
+                placeholder="Type a message..."
+                className="w-full bg-slate-100 border-none rounded-full px-5 py-3.5 pr-14 text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all shadow-inner"
+                onKeyDown={(e) =>
+                  e.key === "Enter" && handleAddTimelineNote(activeTask._id)
+                }
+              />
+              <button
+                onClick={() => handleAddTimelineNote(activeTask._id)}
+                className="absolute right-1.5 p-2.5 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 shadow-md shadow-emerald-200 transition-all flex items-center justify-center"
+              >
+                <Send size={16} className="ml-1" />{" "}
+                {/* ml-1 to center the paper plane slightly */}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
