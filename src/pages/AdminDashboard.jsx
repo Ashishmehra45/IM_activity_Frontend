@@ -4,6 +4,8 @@ import API_BASE_URL from "../config/config"; // 👈 API base URL import karo
 import { useEffect } from "react";
 import {
   LayoutDashboard,
+   Edit3,
+   Trash2,
   Users,
   Briefcase,
   CheckCircle,
@@ -253,6 +255,48 @@ const MPIDCAdminDashboard = () => {
   }, [allTasks, taskFilter, searchQuery]);
 
  
+// 🗑️ Delete Handler
+  const handleDeleteTask = (taskId) => {
+    // Check karo ki koi employee selected hai ya nahi
+    if (!selectedEmployee) return toast.error("Employee select nahi hai!");
+
+    const employeeId = selectedEmployee._id;
+
+    toast.custom((t) => (
+      <div className="bg-white p-6 rounded-2xl shadow-2xl border-l-4 border-red-500">
+        <p className="font-bold text-slate-900">Delete Task?</p>
+        <p className="text-sm text-slate-500">
+          Are you sure you want to delete this task for {selectedEmployee.name}?
+        </p>
+        <div className="mt-4 flex gap-2">
+          <button onClick={() => toast.dismiss(t.id)} className="...">Cancel</button>
+          <button 
+            onClick={async () => {
+              toast.dismiss(t.id);
+              try {
+                const token = localStorage.getItem("token");
+                // API Call with BOTH IDs
+                await axios.delete(`${API_BASE_URL}/admin/delete-task/${employeeId}/${taskId}`, {
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                toast.success("Task Deleted! 🗑️");
+                
+                // Refresh data
+                fetchSpecificTasks(); // Us employee ki list refresh
+                fetchAllTasks();      // Global list refresh
+              } catch (err) {
+                toast.error(err.response?.data?.message || "Delete failed");
+              }
+            }} 
+            className="bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold"
+          >
+            Yes, Delete it!
+          </button>
+        </div>
+      </div>
+    ), { duration: 5000 });
+  };
+
 
   const handleEmployeeClick = (employee) => {
     setSelectedEmployee(employee);
@@ -721,89 +765,99 @@ const MPIDCAdminDashboard = () => {
                         </div>
                       </div>
 
+
                       {/* 🔥 LIVE ASLI TASKS KI LIST */}
                       <h3 className="text-xl font-bold text-slate-900 mb-5 border-t border-slate-100 pt-8">
                         Assigned Tasks
                       </h3>
 
-                      <div className="space-y-3">
-                        {currentEmployeeTasks.length > 0 ? (
-                          currentEmployeeTasks.map((t) => (
-                            <div
-                              key={t._id}
-                              className="bg-white p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm hover:shadow-md transition-all"
-                            >
-                              <div>
-                                {/* 🔥 TITLE & PRIORITY BADGE */}
-                                <div className="flex items-center gap-3 mb-1">
-                                  <h4 className="font-bold text-slate-800 text-lg">
-                                    {t.title}
-                                  </h4>
-                                  <span
-                                    className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-md border text-[10px] font-black uppercase tracking-wider ${
-                                      t.priority === "High"
-                                        ? "bg-red-50 text-red-600 border-red-200"
-                                        : t.priority === "Medium"
-                                          ? "bg-orange-50 text-orange-600 border-orange-200"
-                                          : "bg-blue-50 text-blue-600 border-blue-200"
-                                    }`}
-                                  >
-                                    <span
-                                      className={`w-1.5 h-1.5 rounded-full ${
-                                        t.priority === "High"
-                                          ? "bg-red-500 animate-pulse"
-                                          : t.priority === "Medium"
-                                            ? "bg-orange-500"
-                                            : "bg-blue-500"
-                                      }`}
-                                    ></span>
-                                    {t.priority} Priority
-                                  </span>
-                                </div>
+                    <div className="space-y-3">
+  {currentEmployeeTasks.length > 0 ? (
+    currentEmployeeTasks.map((t) => (
+      <div
+        key={t._id}
+        className="bg-white p-5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm hover:shadow-md transition-all group"
+      >
+        <div className="flex-1">
+          {/* 🔥 TITLE & PRIORITY BADGE */}
+          <div className="flex items-center gap-3 mb-1">
+            <h4 className="font-bold text-slate-800 text-lg">
+              {t.title}
+            </h4>
+            <span
+              className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-md border text-[10px] font-black uppercase tracking-wider ${
+                t.priority === "High"
+                  ? "bg-red-50 text-red-600 border-red-200"
+                  : t.priority === "Medium"
+                    ? "bg-orange-50 text-orange-600 border-orange-200"
+                    : "bg-blue-50 text-blue-600 border-blue-200"
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  t.priority === "High"
+                    ? "bg-red-500 animate-pulse"
+                    : t.priority === "Medium"
+                      ? "bg-orange-500"
+                      : "bg-blue-500"
+                }`}
+              ></span>
+              {t.priority} Priority
+            </span>
+          </div>
 
-                                {/* DESCRIPTION & DATE */}
-                                <p className="text-sm text-slate-600 mb-2">
-                                  {t.description}
-                                </p>
-                                <p className="text-xs text-slate-400 font-semibold flex items-center">
-                                  <Clock size={12} className="mr-1" /> Assigned:{" "}
-                                  {new Date(t.createdAt).toLocaleDateString()}
-                                </p>
-                              </div>
+          {/* DESCRIPTION & DATE */}
+          <p className="text-sm text-slate-600 mb-2 max-w-2xl">
+            {t.description}
+          </p>
+          <p className="text-xs text-slate-400 font-semibold flex items-center">
+            <Clock size={12} className="mr-1" /> Assigned:{" "}
+            {new Date(t.createdAt).toLocaleDateString()}
+          </p>
+        </div>
 
-                              {/* STATUS BADGE */}
-                              {/* STATUS BADGE */}
-                              <span
-                                className={`px-4 py-2 rounded-xl border text-xs font-black uppercase tracking-wider text-center ${
-                                  t.status?.toLowerCase().trim() === "completed"
-                                    ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                                    : t.status?.toLowerCase().trim() ===
-                                        "in progress"
-                                      ? "bg-amber-50 text-amber-600 border-amber-200"
-                                      : t.status?.toLowerCase().trim() ===
-                                            "pending" ||
-                                          t.status?.toLowerCase().trim() ===
-                                            "overdue"
-                                        ? "bg-red-50 text-red-600 border-red-200 animate-pulse" // 🔴 Pending ke liye Red & Blink
-                                        : "bg-slate-50 text-slate-600 border-slate-200"
-                                }`}
-                              >
-                                {t.status}
-                              </span>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8">
-                            <Briefcase
-                              size={32}
-                              className="mx-auto text-slate-300 mb-3"
-                            />
-                            <p className="text-slate-500 font-medium">
-                              task not finded for this employee.
-                            </p>
-                          </div>
-                        )}
-                      </div>
+        {/* 🛠️ ACTIONS & STATUS */}
+        <div className="flex items-center gap-3 self-end sm:self-center">
+          
+         
+          {/* 🗑️ DELETE BUTTON */}
+          <button 
+            onClick={() => handleDeleteTask(t._id)} // Ye wahi function jo humne abhi banaya
+            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+            title="Delete Task"
+          >
+            <Trash2 size={18} />
+          </button>
+
+          {/* STATUS BADGE */}
+          <span
+            className={`px-4 py-2 min-w-[100px] rounded-xl border text-xs font-black uppercase tracking-wider text-center ${
+              t.status?.toLowerCase().trim() === "completed"
+                ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                : t.status?.toLowerCase().trim() === "in progress"
+                  ? "bg-amber-50 text-amber-600 border-amber-200"
+                  : t.status?.toLowerCase().trim() === "pending" || t.status?.toLowerCase().trim() === "overdue"
+                    ? "bg-red-50 text-red-600 border-red-200 animate-pulse"
+                    : "bg-slate-50 text-slate-600 border-slate-200"
+            }`}
+          >
+            {t.status}
+          </span>
+        </div>
+      </div>
+    ))
+  ) : (
+    <div className="text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8">
+      <Briefcase
+        size={32}
+        className="mx-auto text-slate-300 mb-3"
+      />
+      <p className="text-slate-500 font-medium">
+        task not finded for this employee.
+      </p>
+    </div>
+  )}
+</div>
                     </div>
                   </div>
                 )}
